@@ -1,4 +1,4 @@
-/* NOTE KENZO V14 — Cloud auth feedback fixed */
+/* NOTE KENZO V15 — password recovery flow */
 const editor = document.getElementById("editor");
 const fileInput = document.getElementById("fileInput");
 const fileNameEl = document.getElementById("fileName");
@@ -39,6 +39,12 @@ const authEmail = document.getElementById("authEmail");
 const authPassword = document.getElementById("authPassword");
 const signUpBtn = document.getElementById("signUpBtn");
 const signInBtn = document.getElementById("signInBtn");
+const forgotPasswordBtn = document.getElementById("forgotPasswordBtn");
+const resetPasswordPanel = document.getElementById("resetPasswordPanel");
+const newPassword = document.getElementById("newPassword");
+const confirmNewPassword = document.getElementById("confirmNewPassword");
+const resetPasswordStatus = document.getElementById("resetPasswordStatus");
+const updatePasswordBtn = document.getElementById("updatePasswordBtn");
 const signOutBtn = document.getElementById("signOutBtn");
 const syncNowBtn = document.getElementById("syncNowBtn");
 const accountEmail = document.getElementById("accountEmail");
@@ -65,6 +71,7 @@ let findIndex = -1;
 let supabaseClient = null;
 let currentUser = null;
 let cloudBusy = false;
+let passwordRecoveryMode = false;
 
 function uid() {
   if (crypto?.randomUUID) return crypto.randomUUID();
@@ -687,7 +694,12 @@ function initSupabase() {
     handleSession(data.session);
   });
 
-  supabaseClient.auth.onAuthStateChange((_event, session) => {
+  supabaseClient.auth.onAuthStateChange((event, session) => {
+    if (event === "PASSWORD_RECOVERY") {
+      showPasswordRecovery(session);
+      return;
+    }
+
     handleSession(session);
   });
 }
@@ -695,6 +707,12 @@ function initSupabase() {
 async function handleSession(session) {
   currentUser = session?.user || null;
 
+  if (passwordRecoveryMode) {
+    if (session?.user) currentUser = session.user;
+    return;
+  }
+
+  resetPasswordPanel.hidden = true;
   authForm.hidden = Boolean(currentUser);
   loggedInPanel.hidden = !currentUser;
 
@@ -859,6 +877,118 @@ function setAuthBusy(busy, mode = "") {
   if (mode === "signin") signInBtn.textContent = "Memproses…";
 }
 
+function setResetPasswordStatus(message = "", type = "info") {
+  if (!resetPasswordStatus) return;
+  resetPasswordStatus.textContent = message;
+  resetPasswordStatus.className = `auth-status ${message ? type : ""}`;
+}
+
+async function sendPasswordReset() {
+  setAuthStatus("");
+
+  if (!supabaseClient) {
+    setAuthStatus("Supabase belum siap. Refresh halaman lalu coba lagi.", "error");
+    return;
+  }
+
+  const email = authEmail.value.trim();
+
+  if (!email) {
+    setAuthStatus("Masukkan email akun terlebih dahulu.", "error");
+    authEmail.focus();
+    return;
+  }
+
+  forgotPasswordBtn.disabled = true;
+  forgotPasswordBtn.textContent = "Mengirim…";
+  setAuthStatus("Mengirim link reset password…", "info");
+
+  try {
+    const redirectTo = `${window.location.origin}${window.location.pathname}`;
+    const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo });
+
+    if (error) {
+      setAuthStatus(error.message, "error");
+      return;
+    }
+
+    setAuthStatus("Link reset sudah dikirim. Cek email lalu buka link tersebut.", "success");
+  } catch (err) {
+    console.error(err);
+    setAuthStatus("Gagal mengirim email reset. Coba lagi.", "error");
+  } finally {
+    forgotPasswordBtn.disabled = false;
+    forgotPasswordBtn.textContent = "Lupa Password?";
+  }
+}
+
+function showPasswordRecovery(session) {
+  passwordRecoveryMode = true;
+  currentUser = session?.user || currentUser;
+
+  authForm.hidden = true;
+  loggedInPanel.hidden = true;
+  resetPasswordPanel.hidden = false;
+
+  cloudModalInfo.textContent = "Masukkan password baru untuk akun NOTE KENZO.";
+  setResetPasswordStatus("");
+  cloudModal.classList.add("show");
+  cloudModal.setAttribute("aria-hidden", "false");
+
+  setTimeout(() => newPassword.focus(), 80);
+}
+
+async function updateRecoveredPassword() {
+  setResetPasswordStatus("");
+
+  if (!supabaseClient) {
+    setResetPasswordStatus("Supabase belum siap.", "error");
+    return;
+  }
+
+  const password = newPassword.value;
+  const confirmPassword = confirmNewPassword.value;
+
+  if (password.length < 6) {
+    setResetPasswordStatus("Password baru minimal 6 karakter.", "error");
+    return;
+  }
+
+  if (password !== confirmPassword) {
+    setResetPasswordStatus("Kedua password belum sama.", "error");
+    return;
+  }
+
+  updatePasswordBtn.disabled = true;
+  updatePasswordBtn.textContent = "Menyimpan…";
+  setResetPasswordStatus("Mengubah password…", "info");
+
+  try {
+    const { error } = await supabaseClient.auth.updateUser({ password });
+
+    if (error) {
+      setResetPasswordStatus(error.message, "error");
+      return;
+    }
+
+    passwordRecoveryMode = false;
+    newPassword.value = "";
+    confirmNewPassword.value = "";
+    resetPasswordPanel.hidden = true;
+
+    const { data } = await supabaseClient.auth.getSession();
+    await handleSession(data.session);
+    setAuthStatus("Password berhasil diubah.", "success");
+    showToast("Password berhasil diubah");
+  } catch (err) {
+    console.error(err);
+    setResetPasswordStatus("Gagal mengubah password. Buka ulang link reset dari email.", "error");
+  } finally {
+    updatePasswordBtn.disabled = false;
+    updatePasswordBtn.textContent = "Simpan Password Baru";
+  }
+}
+
 async function signIn() {
   setAuthStatus("");
 
@@ -947,7 +1077,7 @@ async function signOut() {
 }
 
 function openCloud() {
-  setAuthStatus("");
+  if (!passwordRecoveryMode) setAuthStatus("");
   cloudModal.classList.add("show");
   cloudModal.setAttribute("aria-hidden", "false");
 }
@@ -1042,6 +1172,14 @@ cloudModal.addEventListener("click", e => {
   if (e.target === cloudModal) closeCloud();
 });
 signInBtn.addEventListener("click", signIn);
+forgotPasswordBtn.addEventListener("click", sendPasswordReset);
+updatePasswordBtn.addEventListener("click", updateRecoveredPassword);
+confirmNewPassword.addEventListener("keydown", e => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    updateRecoveredPassword();
+  }
+});
 authPassword.addEventListener("keydown", e => {
   if (e.key === "Enter") {
     e.preventDefault();
