@@ -904,7 +904,7 @@ async function sendPasswordReset() {
   setAuthStatus("Mengirim link reset password…", "info");
 
   try {
-    const redirectTo = `${window.location.origin}${window.location.pathname}`;
+    const redirectTo = "https://mralde.github.io/notepad/";
     const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo });
 
     if (error) {
