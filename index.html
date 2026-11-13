@@ -178,10 +178,24 @@
           <input class="auth-input" id="authEmail" type="email" placeholder="email@contoh.com" autocomplete="email" />
           <label class="auth-label">Password</label>
           <input class="auth-input" id="authPassword" type="password" placeholder="Minimal 6 karakter" autocomplete="current-password" />
+          <div class="auth-secondary-row">
+            <button class="auth-link-btn" id="forgotPasswordBtn" type="button">Lupa Password?</button>
+          </div>
           <div class="auth-status" id="authStatus" aria-live="polite"></div>
           <div class="auth-actions">
             <button class="tool-btn" id="signUpBtn" type="button">Daftar</button>
             <button class="tool-btn primary" id="signInBtn" type="button">Masuk</button>
+          </div>
+        </div>
+
+        <div id="resetPasswordPanel" hidden>
+          <label class="auth-label">Password baru</label>
+          <input class="auth-input" id="newPassword" type="password" placeholder="Minimal 6 karakter" autocomplete="new-password" />
+          <label class="auth-label">Ulangi password baru</label>
+          <input class="auth-input" id="confirmNewPassword" type="password" placeholder="Ketik ulang password" autocomplete="new-password" />
+          <div class="auth-status" id="resetPasswordStatus" aria-live="polite"></div>
+          <div class="auth-actions">
+            <button class="tool-btn primary" id="updatePasswordBtn" type="button">Simpan Password Baru</button>
           </div>
         </div>
 
